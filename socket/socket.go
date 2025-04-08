@@ -64,12 +64,12 @@ type Socket struct {
 	// The session ID used for connection state recovery, which must not be shared (unlike [id]).
 	//
 	// Private
-	_pid string
+	_pid atomic.Value
 
 	// The offset of the last received packet, which will be sent upon reconnection to allow for the recovery of the connection state.
 	//
 	// Private
-	_lastOffset string
+	_lastOffset atomic.Value
 
 	// Whether the socket is currently connected to the server.
 	//
@@ -566,12 +566,12 @@ func (s *Socket) onopen(...any) {
 //
 // Param: data
 func (s *Socket) _sendConnectPacket(data map[string]any) {
-	if s._pid != "" {
+	if _pid := s._pid.Load(); _pid != nil && _pid != "" {
 		if data == nil {
 			data = map[string]any{}
 		}
-		data["pid"] = s._pid
-		data["offset"] = s._lastOffset
+		data["pid"] = _pid
+		data["offset"] = s._lastOffset.Load()
 	}
 	s.packet(&Packet{
 		Packet: &parser.Packet{
@@ -597,7 +597,7 @@ func (s *Socket) onerror(errs ...any) {
 func (s *Socket) onclose(reason string, description error) {
 	socket_log.Debug("close (%s)", reason)
 	s.connected.Store(false)
-	s.id.Store(nil)
+	s.id.Store(socket.SocketId(""))
 	s.EventEmitter.Emit("disconnect", reason, description)
 	s._clearAcks()
 }
@@ -640,6 +640,7 @@ func (s *Socket) onpacket(packet *parser.Packet) {
 					"It seems you are trying to reach a Socket.IO server in v2.x with a v3.x client, but they are not compatible (more information here: https://socket.io/docs/v3/migrating-from-2-x-to-3-0/)",
 				),
 			)
+			return
 		}
 		s.onconnect(handshake.Sid, handshake.Pid)
 
@@ -688,10 +689,10 @@ func (s *Socket) emitEvent(args []any) {
 		listener(args...)
 	}
 	s.EventEmitter.Emit(events.EventName(args[0].(string)), args[1:]...)
-	if s._pid != "" {
+	if _pid := s._pid.Load(); _pid != nil && _pid != "" {
 		if args_len := len(args); args_len > 0 {
 			if lastOffset, ok := args[args_len-1].(string); ok {
-				s._lastOffset = lastOffset
+				s._lastOffset.Store(lastOffset)
 			}
 		}
 	}
@@ -736,9 +737,9 @@ func (s *Socket) onack(packet *parser.Packet) {
 // Called upon server connect.
 func (s *Socket) onconnect(id string, pid string) {
 	socket_log.Debug("socket connected with id %s", id)
-	s.id.Store(id)
-	s.recovered.Store(pid != "" && s._pid == pid)
-	s._pid = pid // defined only if connection state recovery is enabled
+	s.id.Store(socket.SocketId(id))
+	s.recovered.Store(pid != "" && s._pid.Load() == pid)
+	s._pid.Store(pid) // defined only if connection state recovery is enabled
 	s.connected.Store(true)
 	s.emitBuffered()
 	s.EventEmitter.Emit("connect")

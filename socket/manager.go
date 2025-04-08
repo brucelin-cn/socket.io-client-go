@@ -259,7 +259,7 @@ func (m *Manager) Open(fn func(error)) *Manager {
 		err := errs[0].(error)
 		manager_log.Debug("error")
 		m.cleanup()
-		m._readyState.Store("closed")
+		m._readyState.Store(ReadyStateClosed)
 		m.EventEmitter.Emit("error", err)
 		if fn != nil {
 			fn(err)

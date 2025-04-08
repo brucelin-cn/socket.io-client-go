@@ -5,8 +5,8 @@ go 1.24.1
 require (
 	github.com/zishang520/engine.io-client-go v0.0.0-beta.4
 	github.com/zishang520/engine.io-go-parser v1.3.2
-	github.com/zishang520/engine.io/v2 v2.4.9
-	github.com/zishang520/socket.io-go-parser/v2 v2.4.4
+	github.com/zishang520/engine.io/v2 v2.4.12
+	github.com/zishang520/socket.io-go-parser/v2 v2.4.5
 	github.com/zishang520/socket.io/v2 v2.4.8
 )
 

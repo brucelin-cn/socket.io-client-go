@@ -29,15 +29,15 @@ func extractValue[T any](m map[string]any, key string) (v T, err error) {
 }
 
 func processHandshake(d map[string]any) (*Handshake, error) {
+	if d == nil {
+		return nil, fmt.Errorf("map input cannot be nil")
+	}
 	sid, err := extractValue[string](d, "sid")
 	if err != nil {
 		return nil, err
 	}
 
-	pid, err := extractValue[string](d, "pid")
-	if err != nil {
-		return nil, err
-	}
+	pid, _ := extractValue[string](d, "pid")
 
 	return &Handshake{
 		Sid: sid,
@@ -46,6 +46,9 @@ func processHandshake(d map[string]any) (*Handshake, error) {
 }
 
 func processExtendedError(d map[string]any) (*ExtendedError, error) {
+	if d == nil {
+		return nil, fmt.Errorf("map input cannot be nil")
+	}
 	message, err := extractValue[string](d, "message")
 	if err != nil {
 		return nil, err
