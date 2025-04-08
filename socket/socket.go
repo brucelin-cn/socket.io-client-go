@@ -16,166 +16,91 @@ import (
 	"github.com/zishang520/socket.io/v2/socket"
 )
 
-// A Socket is the fundamental class for interacting with the server.
+// Socket represents a Socket.IO connection to a specific namespace.
+// It implements an event-driven interface for real-time bidirectional communication.
 //
-// A Socket belongs to a certain Namespace (by default /) and uses an underlying {@link Manager} to communicate.
+// Socket belongs to a specific namespace (default '/') and uses an underlying Manager
+// for network communication. It supports event emission, acknowledgments, and automatic
+// reconnection.
 //
-// Example:
+// Example usage:
 //
-//	const socket = io()
+//	socket := io.Connect("http://localhost:8000", nil)
 //
-//	socket.on("connect", () => {
-//		console.log("connected")
+//	socket.On("connect", func() {
+//		fmt.Println("Connected!")
 //	})
 //
-//	// send an event to the server
-//	socket.emit("foo", "bar")
+//	// Send an event to the server
+//	socket.Emit("message", "Hello server!")
 //
-//	socket.on("foobar", () => {
-//		// an event was received from the server
+//	// Listen for server events
+//	socket.On("reply", func(msg string) {
+//		fmt.Printf("Received: %s\n", msg)
 //	})
 //
-//	// upon disconnection
-//	socket.on("disconnect", (reason) => {
-//		console.log(`disconnected due to ${reason}`)
+//	// Handle disconnection
+//	socket.On("disconnect", func(reason string) {
+//		fmt.Printf("Disconnected: %s\n", reason)
 //	})
 type Socket struct {
 	types.EventEmitter
 
-	// Public
-	//
-	// Readonly
+	// io represents the Manager instance that created this Socket.
 	io *Manager
 
-	// A unique identifier for the session. `undefined` when the socket is not connected.
-	//
-	// Example:
-	// const socket = io();
-	//
-	// console.log(socket.id); // undefined
-	//
-	// socket.on("connect", () => {
-	//   console.log(socket.id); // "G5p5..."
-	// });
-	//
-	// Public
+	// id is the session identifier, only available when connected.
 	id atomic.Value
 
-	// The session ID used for connection state recovery, which must not be shared (unlike [id]).
-	//
-	// Private
+	// _pid is the private session ID used for connection state recovery.
 	_pid atomic.Value
 
-	// The offset of the last received packet, which will be sent upon reconnection to allow for the recovery of the connection state.
-	//
-	// Private
+	// _lastOffset stores the offset of the last received packet for connection recovery.
 	_lastOffset atomic.Value
 
-	// Whether the socket is currently connected to the server.
-	//
-	// Example:
-	// const socket = io();
-	//
-	// socket.on("connect", () => {
-	//   console.log(socket.connected); // true
-	// });
-	//
-	// socket.on("disconnect", () => {
-	//   console.log(socket.connected); // false
-	// });
-	//
-	// Public
+	// connected indicates whether the socket is currently connected to the server.
 	connected atomic.Bool
 
-	// Whether the connection state was recovered after a temporary disconnection. In that case, any missed packets will
-	// be transmitted by the server.
-	//
-	// Public
+	// recovered indicates if the connection state was recovered after reconnection.
 	recovered atomic.Bool
 
-	// Credentials that are sent when accessing a namespace.
-	//
-	// Example:
-	// const socket = io({
-	//   auth: {
-	//     token: "abcd"
-	//   }
-	// });
-	//
-	// // or with a function
-	// const socket = io({
-	//   auth: (cb) => {
-	//     cb({ token: localStorage.token })
-	//   }
-	// });
-	//
-	// Public
+	// auth stores the authentication credentials for namespace access.
 	auth map[string]any
 
-	// Buffer for packets received before the CONNECT packet
-	//
-	// Public
+	// receiveBuffer stores packets received before the CONNECT packet.
 	receiveBuffer *types.Slice[[]any]
 
-	// Buffer for packets that will be sent once the socket is connected
-	//
-	// Public
+	// sendBuffer stores packets that will be sent after connection is established.
 	sendBuffer *types.Slice[*Packet]
 
-	// The _queue of packets to be sent with retry in case of failure.
-	//
-	// Packets are sent one by one, each waiting for the server acknowledgement, in order to guarantee the delivery order.
-	//
-	// Private
+	// _queue manages packets requiring guaranteed delivery with retry support.
 	_queue *types.Slice[*QueuedPacket]
 
-	// A sequence to generate the ID of the {@link QueuedPacket}.
-	//
-	// Private
+	// _queueSeq generates unique IDs for queued packets.
 	_queueSeq atomic.Uint64
 
-	// Private
-	//
-	// Readonly
+	// nsp is the namespace this socket belongs to.
 	nsp string
-	// Private
-	//
-	// Readonly
+
+	// _opts stores the socket configuration options.
 	_opts SocketOptionsInterface
 
-	// Private
+	// ids generates unique IDs for emitted events requiring acknowledgment.
 	ids atomic.Uint64
 
-	// A map containing acknowledgement handlers.
-	//
-	// The `withError` attribute is used to differentiate handlers that accept an error as first argument:
-	//
-	// - `socket.emit("test", (err, value) => { ... })` with `ackTimeout` option
-	// - `socket.timeout(5000).emit("test", (err, value) => { ... })`
-	// - `const value = await socket.emitWithAck("test")`
-	//
-	// From those that don't:
-	//
-	// - `socket.emit("test", (value) => { ... });`
-	//
-	// In the first case, the handlers will be called with an error when:
-	//
-	// - the timeout is reached
-	// - the socket gets disconnected
-	//
-	// In the second case, the handlers will be simply discarded upon disconnection, since the client will never receive
-	// an acknowledgement from the server.
-	//
-	//
-	// Private
+	// acks stores callbacks for event acknowledgments.
 	acks *types.Map[uint64, socket.Ack]
-	// Private
+
+	// flags stores temporary modifiers for the next emission.
 	flags atomic.Pointer[Flags]
-	// Private
+
+	// subs stores active event subscriptions.
 	subs atomic.Pointer[types.Slice[types.Callable]]
-	// Private
+
+	// _anyListeners stores listeners that catch all incoming events.
 	_anyListeners *types.Slice[events.Listener]
-	// Private
+
+	// _anyOutgoingListeners stores listeners that catch all outgoing events.
 	_anyOutgoingListeners *types.Slice[events.Listener]
 }
 

@@ -15,6 +15,21 @@ import (
 
 type Engine = engine.Socket
 
+// Manager implements the Socket.IO client manager that handles connections to a Socket.IO server.
+// It manages connection lifecycle, automatic reconnection, and socket namespaces.
+//
+// Example usage:
+//
+//	opts := DefaultManagerOptions()
+//	opts.SetTimeout(5 * time.Second)
+//
+//	manager, err := NewManager("http://localhost:8080", opts)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Get a socket for the default namespace
+//	socket := manager.Socket("/", nil)
 type Manager struct {
 	types.EventEmitter
 
@@ -75,6 +90,15 @@ func MakeManager() *Manager {
 	return r
 }
 
+// NewManager creates a new Manager instance with the specified URI and options.
+// It establishes and manages the connection to a Socket.IO server.
+//
+// Parameters:
+//   - uri: The URI of the Socket.IO server (e.g., "http://localhost:8080")
+//   - opts: Configuration options for the manager
+//
+// Returns:
+//   - *Manager: A new manager instance
 func NewManager(uri string, opts ManagerOptionsInterface) *Manager {
 	r := MakeManager()
 
@@ -235,7 +259,14 @@ func (m *Manager) maybeReconnectOnOpen() {
 	}
 }
 
-// Sets the current transport `socket`.
+// Open initiates the connection to the server.
+// This is called automatically when autoConnect is true (default).
+//
+// Parameters:
+//   - fn: Optional callback that will be called when connection is established or fails
+//
+// Returns:
+//   - *Manager: The manager instance for chaining
 func (m *Manager) Open(fn func(error)) *Manager {
 	manager_log.Debug("readyState %s", m._readyState.Load())
 	if m._readyState.Load() == ReadyStateOpen || m._readyState.Load() == ReadyStateOpening {
@@ -348,7 +379,14 @@ func (m *Manager) onerror(errs ...any) {
 	m.EventEmitter.Emit("error", errs...)
 }
 
-// Creates a new socket for the given `nsp`.
+// Socket creates or returns an existing Socket instance for the specified namespace.
+//
+// Parameters:
+//   - nsp: The namespace to connect to (defaults to "/")
+//   - opts: Socket-specific options
+//
+// Returns:
+//   - *Socket: A Socket instance for the namespace
 func (m *Manager) Socket(nsp string, opts SocketOptionsInterface) *Socket {
 	socket, ok := m.nsps.Load(nsp)
 	if !ok {
@@ -361,7 +399,11 @@ func (m *Manager) Socket(nsp string, opts SocketOptionsInterface) *Socket {
 	return socket
 }
 
-// Called upon a socket close.
+// _destroy cleans up resources when a socket is closed.
+// If this is the last active socket, the manager connection will also be closed.
+//
+// Parameters:
+//   - socket: The socket being destroyed
 func (m *Manager) _destroy(socket *Socket) {
 	close := true
 	m.nsps.Range(func(nsp string, socket *Socket) bool {
@@ -411,11 +453,11 @@ func (m *Manager) disconnect() {
 	m._close()
 }
 
-// Called when:
+// _onclose handles cleanup when the connection is closed.
 //
-// - the low-level engine is closed
-// - the parser encountered a badly formatted packet
-// - all sockets are disconnected
+// Parameters:
+//   - reason: The reason for disconnection
+//   - description: Additional error details if applicable
 func (m *Manager) onclose(reason string, description error) {
 	manager_log.Debug("closed due to %s", reason)
 
@@ -432,7 +474,8 @@ func (m *Manager) onclose(reason string, description error) {
 	}
 }
 
-// Attempt a reconnection.
+// _reconnect attempts to reconnect to the server after a disconnection.
+// It implements exponential backoff with jitter for retry timing.
 func (m *Manager) reconnect() {
 	if m._reconnecting.Load() || m.skipReconnect.Load() {
 		return
