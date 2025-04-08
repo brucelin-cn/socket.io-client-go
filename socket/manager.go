@@ -238,7 +238,7 @@ func (m *Manager) maybeReconnectOnOpen() {
 // Sets the current transport `socket`.
 func (m *Manager) Open(fn func(error)) *Manager {
 	manager_log.Debug("readyState %s", m._readyState.Load())
-	if m._readyState.Load() == ReadyStateOpen {
+	if m._readyState.Load() == ReadyStateOpen || m._readyState.Load() == ReadyStateOpening {
 		return m
 	}
 

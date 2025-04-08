@@ -207,9 +207,9 @@ func (s *Socket) Io() *Manager {
 	return s.io
 }
 
-func (s *Socket) Id() socket.SocketId {
+func (s *Socket) Id() string {
 	if id := s.id.Load(); id != nil {
-		return id.(socket.SocketId)
+		return id.(string)
 	}
 	return ""
 }
@@ -597,7 +597,7 @@ func (s *Socket) onerror(errs ...any) {
 func (s *Socket) onclose(reason string, description error) {
 	socket_log.Debug("close (%s)", reason)
 	s.connected.Store(false)
-	s.id.Store(socket.SocketId(""))
+	s.id.Store("")
 	s.EventEmitter.Emit("disconnect", reason, description)
 	s._clearAcks()
 }
@@ -737,7 +737,7 @@ func (s *Socket) onack(packet *parser.Packet) {
 // Called upon server connect.
 func (s *Socket) onconnect(id string, pid string) {
 	socket_log.Debug("socket connected with id %s", id)
-	s.id.Store(socket.SocketId(id))
+	s.id.Store(id)
 	s.recovered.Store(pid != "" && s._pid.Load() == pid)
 	s._pid.Store(pid) // defined only if connection state recovery is enabled
 	s.connected.Store(true)
