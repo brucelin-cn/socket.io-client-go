@@ -38,6 +38,10 @@ func init() {
 }
 
 func lookup(uri string, opts OptionsInterface) (*Socket, error) {
+	if opts == nil {
+		opts = DefaultOptions()
+	}
+
 	path := "/socket.io"
 	if opts.GetRawPath() != nil {
 		path = opts.Path()

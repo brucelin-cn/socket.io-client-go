@@ -32,5 +32,5 @@ goto default
 
 :test
     CALL go clean -testcache
-    CALL go test -race -cover -covermode=atomic -mod=mod ./...
+    CALL go test -race -cover -timeout 60s -covermode=atomic -mod=mod ./...
     GOTO :EOF
