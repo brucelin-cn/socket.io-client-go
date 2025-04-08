@@ -404,7 +404,7 @@ func (m *Manager) Socket(nsp string, opts SocketOptionsInterface) *Socket {
 //
 // Parameters:
 //   - socket: The socket being destroyed
-func (m *Manager) _destroy(socket *Socket) {
+func (m *Manager) _destroy(_ *Socket) {
 	close := true
 	m.nsps.Range(func(nsp string, socket *Socket) bool {
 		if socket.Active() {

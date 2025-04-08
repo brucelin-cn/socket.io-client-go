@@ -29,10 +29,9 @@ import (
 //
 //	socket.On("connect", func() {
 //		fmt.Println("Connected!")
+//		// Send an event to the server
+//		socket.Emit("message", "Hello server!")
 //	})
-//
-//	// Send an event to the server
-//	socket.Emit("message", "Hello server!")
 //
 //	// Listen for server events
 //	socket.On("reply", func(msg string) {
@@ -159,7 +158,11 @@ func (s *Socket) SendBuffer() *types.Slice[*Packet] {
 	return s.sendBuffer
 }
 
-// Socket` constructor.
+// Construct initializes the Socket instance.
+//
+// io: The Manager instance.
+// nsp: The namespace.
+// opts: The socket options.
 func (s *Socket) Construct(io *Manager, nsp string, opts SocketOptionsInterface) {
 	s.io = io
 	s.nsp = nsp
@@ -172,23 +175,23 @@ func (s *Socket) Construct(io *Manager, nsp string, opts SocketOptionsInterface)
 	}
 }
 
-// Whether the socket is currently disconnected
+// Disconnected checks whether the socket is currently disconnected.
 //
 // Example:
-// const socket = io()
 //
-//	socket.on("connect", () => {
-//	  console.log(socket.disconnected) // false
+//	socket := io.NewClient("", nil)
+//	socket.On("connect", func(...any) {
+//	  fmt.Println(socket.Disconnected()) // false
 //	})
 //
-//	socket.on("disconnect", () => {
-//	  console.log(socket.disconnected) // true
+//	socket.On("disconnect", func(...any) {
+//	  fmt.Println(socket.Disconnected()) // true
 //	})
 func (s *Socket) Disconnected() bool {
 	return !s.connected.Load()
 }
 
-// Subscribe to open, close and packet events
+// subEvents subscribes to open, close, and packet events.
 func (s *Socket) subEvents() {
 	if s.Active() {
 		return
@@ -208,34 +211,32 @@ func (s *Socket) subEvents() {
 	))
 }
 
-// Whether the Socket will try to reconnect when its Manager connects or reconnects.
+// Active checks whether the Socket will try to reconnect when its Manager connects or reconnects.
 //
 // Example:
-// const socket = io();
 //
-// console.log(socket.active); // true
+//	socket := io.NewClient("", nil)
+//	fmt.Println(socket.Active()) // true
 //
-//	socket.on("disconnect", (reason) => {
-//	  if (reason === "io server disconnect") {
+//	socket.On("disconnect", func(reason ...any) {
+//	  if reason[0].(string) == "io server disconnect" {
 //	    // the disconnection was initiated by the server, you need to manually reconnect
-//	    console.log(socket.active); // false
+//	    fmt.Println(socket.Active()) // false
 //	  }
 //	  // else the socket will automatically try to reconnect
-//	  console.log(socket.active); // true
-//	});
+//	  fmt.Println(socket.Active()) // true
+//	})
 func (s *Socket) Active() bool {
 	return s.subs.Load() != nil
 }
 
-// "Opens" the socket.
+// Connect "opens" the socket.
 //
 // Example:
 //
-//	const socket = io({
-//	  autoConnect: false
-//	});
-//
-// socket.connect();
+//	socket := io.NewClient("", nil)
+//	socket.SetAutoConnect(false)
+//	socket.Connect()
 func (s *Socket) Connect() *Socket {
 	if s.connected.Load() {
 		return s
@@ -251,45 +252,43 @@ func (s *Socket) Connect() *Socket {
 	return s
 }
 
-// Alias for [Socket.Connect].
+// Open is an alias for Connect.
 func (s *Socket) Open() *Socket {
 	return s.Connect()
 }
 
-// Sends a `message` event.
+// Send sends a `message` event.
 //
 // This method mimics the WebSocket.send() method.
 //
-// See: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/send
-//
 // Example:
-// socket.send("hello");
 //
-// // this is equivalent to
-// socket.emit("message", "hello");
+//	socket := io.NewClient("", nil)
+//	socket.Send("hello")
 //
-// Return: [Socket]
+//	// this is equivalent to
+//	socket.Emit("message", "hello")
 func (s *Socket) Send(args ...any) *Socket {
 	s.Emit("message", args...)
 	return s
 }
 
-// Override `emit`.
+// Emit overrides the default emit behavior.
 // If the event is in `events`, it's emitted normally.
 //
 // Example:
-// socket.emit("hello", "world");
 //
-// // all serializable datastructures are supported (no need to call JSON.stringify)
-// socket.emit("hello", 1, "2", { 3: ["4"], 5: Uint8Array.from([6]) });
+//	socket := io.NewClient("", nil)
+//	socket.Emit("hello", "world")
 //
-// // with an acknowledgement from the server
+//	// all serializable datastructures are supported (no need to call JSON.stringify)
+//	socket.Emit("hello", 1, "2", map[int][]string{3: {"4"}, 5: {"6"}})
 //
-//	socket.emit("hello", "world", (val) => {
+//	// with an acknowledgement from the server
+//
+//	socket.Emit("hello", "world", func(val []any, err error) {
 //	  // ...
-//	});
-//
-// Return: [Socket]
+//	})
 func (s *Socket) Emit(ev string, args ...any) error {
 	if RESERVED_EVENTS.Has(ev) {
 		return fmt.Errorf(`"%s" is a reserved event name`, ev)
@@ -382,31 +381,28 @@ func (s *Socket) _registerAckCallback(id uint64, ack socket.Ack) {
 	})
 }
 
-// Emits an event and waits for an acknowledgement
+// EmitWithAck emits an event and waits for an acknowledgement.
 //
 // Example:
-// // without timeout
-// const response = await socket.emitWithAck("hello", "world");
 //
-// // with a specific timeout
+//	// without timeout
+//	socket.EmitWithAck("hello", "world")(func([]any, error){
 //
-//	try {
-//	  const response = await socket.timeout(1000).emitWithAck("hello", "world");
-//	} catch (err) {
+//	})
 //
-//	  // the server did not acknowledge the event in the given delay
-//	}
+//	// with a specific timeout
+//	socket.Timeout(1000 * time.Millisecond).EmitWithAck("hello", "world")(func([]any, error){
 //
-// Return: a Promise that will be fulfilled when the server acknowledges the event
+//	})
 func (s *Socket) EmitWithAck(ev string, args ...any) func(socket.Ack) {
 	return func(ack socket.Ack) {
 		s.Emit(ev, append(args, ack)...)
 	}
 }
 
-// Add the packet to the queue.
+// _addToQueue adds the packet to the queue.
 //
-// Param: args
+// args: The packet arguments.
 func (s *Socket) _addToQueue(args []any) {
 	args_len := len(args)
 	ack, withAck := args[args_len-1].(socket.Ack)
@@ -449,9 +445,9 @@ func (s *Socket) _addToQueue(args []any) {
 	s._drainQueue(false)
 }
 
-// Send the first packet of the queue, and wait for an acknowledgement from the server.
+// _drainQueue sends the first packet of the queue and waits for an acknowledgement from the server.
 //
-// Param: force - whether to resend a packet that has not been acknowledged yet
+// force: Whether to resend a packet that has not been acknowledged yet.
 func (s *Socket) _drainQueue(force bool) {
 	socket_log.Debug("draining queue")
 	if !s.connected.Load() || s._queue.Len() == 0 {
@@ -473,23 +469,23 @@ func (s *Socket) _drainQueue(force bool) {
 	s.Emit(packet.Args[0].(string), packet.Args[1:]...)
 }
 
-// Sends a packet.
+// packet sends a packet.
 //
-// Param: packet
+// packet: The packet to send.
 func (s *Socket) packet(packet *Packet) {
 	packet.Nsp = s.nsp
 	s.io._packet(packet)
 }
 
-// Called upon engine `open`.
+// onopen is called upon engine `open`.
 func (s *Socket) onopen(...any) {
 	socket_log.Debug("transport is open - connecting")
 	s._sendConnectPacket(s.auth)
 }
 
-// Sends a CONNECT packet to initiate the Socket.IO session.
+// _sendConnectPacket sends a CONNECT packet to initiate the Socket.IO session.
 //
-// Param: data
+// data: The data to send.
 func (s *Socket) _sendConnectPacket(data map[string]any) {
 	if _pid := s._pid.Load(); _pid != nil && _pid != "" {
 		if data == nil {
@@ -506,19 +502,19 @@ func (s *Socket) _sendConnectPacket(data map[string]any) {
 	})
 }
 
-// Called upon engine or manager `error`.
+// onerror is called upon engine or manager `error`.
 //
-// Param: err
+// errs: The errors.
 func (s *Socket) onerror(errs ...any) {
 	if !s.connected.Load() {
 		s.EventEmitter.Emit("connect_error", errs...)
 	}
 }
 
-// Called upon engine `close`.
+// onclose is called upon engine `close`.
 //
-// Param: reason
-// Param: description
+// reason: The reason for the close.
+// description: The error description.
 func (s *Socket) onclose(reason string, description error) {
 	socket_log.Debug("close (%s)", reason)
 	s.connected.Store(false)
@@ -527,8 +523,7 @@ func (s *Socket) onclose(reason string, description error) {
 	s._clearAcks()
 }
 
-// Clears the acknowledgement handlers upon disconnection, since the client will never receive an acknowledgement from
-// the server.
+// _clearAcks clears the acknowledgement handlers upon disconnection, since the client will never receive an acknowledgement from the server.
 func (s *Socket) _clearAcks() {
 	s.acks.Range(func(id uint64, ack socket.Ack) bool {
 		isBuffered := false
@@ -546,9 +541,9 @@ func (s *Socket) _clearAcks() {
 	})
 }
 
-// Called with socket packet.
+// onpacket is called with socket packet.
 //
-// Param: packet
+// packet: The packet.
 func (s *Socket) onpacket(packet *parser.Packet) {
 	if packet.Nsp != s.nsp {
 		return
@@ -561,9 +556,7 @@ func (s *Socket) onpacket(packet *parser.Packet) {
 		if err != nil || handshake.Sid == "" {
 			s.EventEmitter.Emit(
 				"connect_error",
-				errors.New(
-					"It seems you are trying to reach a Socket.IO server in v2.x with a v3.x client, but they are not compatible (more information here: https://socket.io/docs/v3/migrating-from-2-x-to-3-0/)",
-				),
+				errors.New("it seems you are trying to reach a Socket.IO server in v2.x with a v3.x client, but they are not compatible (more information here: https://socket.io/docs/v3/migrating-from-2-x-to-3-0/)"),
 			)
 			return
 		}
@@ -590,9 +583,9 @@ func (s *Socket) onpacket(packet *parser.Packet) {
 	}
 }
 
-// Called upon a server event.
+// onevent is called upon a server event.
 //
-// Param: packet
+// packet: The packet.
 func (s *Socket) onevent(packet *parser.Packet) {
 	args := packet.Data.([]any)
 	socket_log.Debug("emitting event %v", args)
@@ -623,7 +616,9 @@ func (s *Socket) emitEvent(args []any) {
 	}
 }
 
-// Produces an ack callback to emit with an event.
+// ack produces an ack callback to emit with an event.
+//
+// id: The ack ID.
 func (s *Socket) ack(id uint64) socket.Ack {
 	sent := &sync.Once{}
 	return func(args []any, _ error) {
@@ -641,9 +636,9 @@ func (s *Socket) ack(id uint64) socket.Ack {
 	}
 }
 
-// Called upon a server acknowledgement.
+// onack is called upon a server acknowledgement.
 //
-// Param: packet
+// packet: The packet.
 func (s *Socket) onack(packet *parser.Packet) {
 	if packet.Id == nil {
 		socket_log.Debug("bad ack nil")
@@ -659,7 +654,10 @@ func (s *Socket) onack(packet *parser.Packet) {
 	ack(packet.Data.([]any), nil)
 }
 
-// Called upon server connect.
+// onconnect is called upon server connect.
+//
+// id: The connection ID.
+// pid: The private session ID.
 func (s *Socket) onconnect(id string, pid string) {
 	socket_log.Debug("socket connected with id %s", id)
 	s.id.Store(id)
@@ -671,7 +669,7 @@ func (s *Socket) onconnect(id string, pid string) {
 	s._drainQueue(true)
 }
 
-// Emit buffered events (received and emitted).
+// emitBuffered emits buffered events (received and emitted).
 func (s *Socket) emitBuffered() {
 	s.receiveBuffer.DoWrite(func(values [][]any) [][]any {
 		for _, args := range values {
@@ -689,15 +687,15 @@ func (s *Socket) emitBuffered() {
 	})
 }
 
-// Called upon server disconnect.
+// ondisconnect is called upon server disconnect.
 func (s *Socket) ondisconnect() {
 	socket_log.Debug("server disconnect (%s)", s.nsp)
 	s.destroy()
 	s.onclose("io server disconnect", nil)
 }
 
-// Called upon forced client/server side disconnections,
-// this method ensures the manager stops tracking us and
+// destroy is called upon forced client/server side disconnections.
+// This method ensures the manager stops tracking us and
 // that reconnections don't get triggered for s.
 func (s *Socket) destroy() {
 	if subs := s.subs.Load(); subs != nil {
@@ -713,20 +711,18 @@ func (s *Socket) destroy() {
 	s.io._destroy(s)
 }
 
-// Disconnects the socket manually. In that case, the socket will not try to reconnect.
+// Disconnect disconnects the socket manually. In that case, the socket will not try to reconnect.
 //
-// If this is the last active Socket instance of the {@link Manager}, the low-level connection will be closed.
+// If this is the last active Socket instance of the [Manager], the low-level connection will be closed.
 //
 // Example:
-// const socket = io();
 //
-//	socket.on("disconnect", (reason) => {
-//	  // console.log(reason); prints "io client disconnect"
-//	});
+//	socket := io.NewClient("", nil)
+//	socket.On("disconnect", func(reason ...any) {
+//	  fmt.Println(reason[0]) // prints "io client disconnect"
+//	})
 //
-// socket.disconnect();
-//
-// Return: [Socket]
+//	socket.Disconnect()
 func (s *Socket) Disconnect() *Socket {
 	if s.connected.Load() {
 		socket_log.Debug("performing disconnect (%s)", s.nsp)
@@ -744,102 +740,95 @@ func (s *Socket) Disconnect() *Socket {
 }
 
 // Alias for [Socket.Disconnect].
-//
-// Return: [Socket]
 func (s *Socket) Close() *Socket {
 	return s.Disconnect()
 }
 
-// Sets the compress flag.
+// Compress sets the compress flag.
 //
 // Example:
 //
-//	socket.Compress(false).Emit("hello");
+//	socket := io.NewClient("", nil)
+//	socket.Compress(false).Emit("hello")
 //
-// Param: compress - if `true`, compresses the sending data
-// Return: [Socket]
+// compress: If `true`, compresses the sending data.
 func (s *Socket) Compress(compress bool) *Socket {
 	s.flags.Load().Compress = compress
 	return s
 }
 
-// Sets a modifier for a subsequent event emission that the event message will be dropped when this socket is not
+// Volatile sets a modifier for a subsequent event emission that the event message will be dropped when this socket is not
 // ready to send messages.
 //
 // Example:
 //
-//	socket.Volatile().Emit("hello"); // the server may or may not receive it
-//
-// Returns: [Socket]
+//	socket := io.NewClient("", nil)
+//	socket.Volatile().Emit("hello") // the server may or may not receive it
 func (s *Socket) Volatile() *Socket {
 	s.flags.Load().Volatile = true
 	return s
 }
 
-// Sets a modifier for a subsequent event emission that the callback will be called with an error when the
+// Timeout sets a modifier for a subsequent event emission that the callback will be called with an error when the
 // given number of milliseconds have elapsed without an acknowledgement from the server:
 //
 // Example:
 //
-//	socket.Timeout(5000*time.Millisecond).Emit("my-event", func([]any, err) {
+//	socket := io.NewClient("", nil)
+//	socket.Timeout(5000 * time.Millisecond).Emit("my-event", func([]any, err) {
 //	  if err != nil {
 //	    // the server did not acknowledge the event in the given delay
 //	  }
 //	})
-//
-// Returns: [Socket]
 func (s *Socket) Timeout(timeout time.Duration) *Socket {
 	s.flags.Load().Timeout = &timeout
 	return s
 }
 
-// Adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
+// OnAny adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
 // callback.
 //
 // Example:
 //
-//	socket.OnAny(func(...any) => {
-//	  console.log(`got ${event}`);
-//	});
-//
-// Param: listener
+//	socket := io.NewClient("", nil)
+//	socket.OnAny(func(...any) {
+//	  fmt.Println("got event")
+//	})
 func (s *Socket) OnAny(listener events.Listener) *Socket {
 	s._anyListeners.Push(listener)
 	return s
 }
 
-// Adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
+// PrependAny adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
 // callback. The listener is added to the beginning of the listeners array.
 //
 // Example:
 //
-//	socket.prependAny((event, ...args) => {
-//	  console.log(`got event ${event}`);
-//	});
-//
-// Param: listener
+//	socket := io.NewClient("", nil)
+//	socket.PrependAny(func(...any) {
+//	  fmt.Println("got event")
+//	})
 func (s *Socket) PrependAny(listener events.Listener) *Socket {
 	s._anyListeners.Unshift(listener)
 	return s
 }
 
-// Removes the listener that will be fired when any event is emitted.
+// OffAny removes the listener that will be fired when any event is emitted.
 //
 // Example:
 //
-//	const catchAllListener = (event, ...args) => {
-//	  console.log(`got event ${event}`);
+//	catchAllListener := func(...any) {
+//	  fmt.Println("got event")
 //	}
 //
-// socket.onAny(catchAllListener);
+//	socket := io.NewClient("", nil)
+//	socket.OnAny(catchAllListener)
 //
-// // remove a specific listener
-// socket.offAny(catchAllListener);
+//	// remove a specific listener
+//	socket.OffAny(catchAllListener)
 //
-// // or remove all listeners
-// socket.offAny();
-//
-// Param: listener
+//	// or remove all listeners
+//	socket.OffAny()
 func (s *Socket) OffAny(listener events.Listener) *Socket {
 	if listener != nil {
 		listenerPointer := reflect.ValueOf(listener).Pointer()
@@ -852,63 +841,60 @@ func (s *Socket) OffAny(listener events.Listener) *Socket {
 	return s
 }
 
-// Returns an array of listeners that are listening for any event that is specified. This array can be manipulated,
+// ListenersAny returns an array of listeners that are listening for any event that is specified. This array can be manipulated,
 // e.g. to remove listeners.
 func (s *Socket) ListenersAny() []events.Listener {
 	return s._anyListeners.All()
 }
 
-// Adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
+// OnAnyOutgoing adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
 // callback.
 //
 // Note: acknowledgements sent to the server are not included.
 //
 // Example:
 //
-//	socket.onAnyOutgoing((event, ...args) => {
-//	  console.log(`sent event ${event}`);
-//	});
-//
-// Param: listener
+//	socket := io.NewClient("", nil)
+//	socket.OnAnyOutgoing(func(...any) {
+//	  fmt.Println("sent event")
+//	})
 func (s *Socket) OnAnyOutgoing(listener events.Listener) *Socket {
 	s._anyOutgoingListeners.Push(listener)
 	return s
 }
 
-// Adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
+// PrependAnyOutgoing adds a listener that will be fired when any event is emitted. The event name is passed as the first argument to the
 // callback. The listener is added to the beginning of the listeners array.
 //
 // Note: acknowledgements sent to the server are not included.
 //
 // Example:
-// socket.prependAnyOutgoing((event, ...args) => {
-//   console.log(`sent event ${event}`);
-// });
 //
-// Param: listener
-
+//	socket := io.NewClient("", nil)
+//	socket.PrependAnyOutgoing(func(...any) {
+//	  fmt.Println("sent event")
+//	})
 func (s *Socket) PrependAnyOutgoing(listener events.Listener) *Socket {
 	s._anyOutgoingListeners.Unshift(listener)
 	return s
 }
 
-// Removes the listener that will be fired when any event is emitted.
+// OffAnyOutgoing removes the listener that will be fired when any event is emitted.
 //
 // Example:
 //
-//	const catchAllListener = (event, ...args) => {
-//	  console.log(`sent event ${event}`);
+//	catchAllListener := func(...any) {
+//	  fmt.Println("sent event")
 //	}
 //
-// socket.onAnyOutgoing(catchAllListener);
+//	socket := io.NewClient("", nil)
+//	socket.OnAnyOutgoing(catchAllListener)
 //
-// // remove a specific listener
-// socket.offAnyOutgoing(catchAllListener);
+//	// remove a specific listener
+//	socket.OffAnyOutgoing(catchAllListener)
 //
-// // or remove all listeners
-// socket.offAnyOutgoing();
-//
-// Param: [listener] - the catch-all listener (optional)
+//	// or remove all listeners
+//	socket.OffAnyOutgoing()
 func (s *Socket) OffAnyOutgoing(listener events.Listener) *Socket {
 	if listener != nil {
 		listenerPointer := reflect.ValueOf(listener).Pointer()
@@ -921,15 +907,15 @@ func (s *Socket) OffAnyOutgoing(listener events.Listener) *Socket {
 	return s
 }
 
-// Returns an array of listeners that are listening for any event that is specified. This array can be manipulated,
+// ListenersAnyOutgoing returns an array of listeners that are listening for any event that is specified. This array can be manipulated,
 // e.g. to remove listeners.
 func (s *Socket) ListenersAnyOutgoing() []events.Listener {
 	return s._anyOutgoingListeners.All()
 }
 
-// Notify the listeners for each packet sent
+// notifyOutgoingListeners notifies the listeners for each packet sent.
 //
-// Param: packet
+// packet: The packet.
 func (s *Socket) notifyOutgoingListeners(packet *Packet) {
 	if s._anyOutgoingListeners.Len() > 0 {
 		for _, listener := range s._anyOutgoingListeners.All() {
