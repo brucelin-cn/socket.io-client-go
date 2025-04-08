@@ -7,23 +7,7 @@ A robust Go client implementation for [Socket.IO](http://github.com/zishang520/e
 
 ## Features
 
-- **Multiple Transport Support**
-  - WebSocket for full-duplex communication
-  - HTTP long-polling for maximum compatibility
-  - WebTransport for modern browsers
-  - Automatic transport upgrade mechanism
-
-- **Reliability & Performance**
-  - Automatic reconnection with configurable retry logic
-  - Binary data support for efficient data transfer
-  - Built-in heartbeat mechanism
-  - Connection state management
-
-- **Developer-Friendly**
-  - Event-driven architecture
-  - Comprehensive error handling
-  - Configurable logging
-  - Extensive customization options
+- Haven't written it yet.
 
 ## Installation
 
@@ -39,116 +23,70 @@ go get github.com/zishang520/socket.io-client-go
 package main
 
 import (
-    "log"
     "time"
-    eio "github.com/zishang520/socket.io-client-go/engine"
+
+    "github.com/zishang520/engine.io-client-go/transports"
+    "github.com/zishang520/engine.io/v2/types"
     "github.com/zishang520/engine.io/v2/utils"
-    "github.com/zishang520/engine.io/v2/types"
+    "github.com/zishang520/socket.io-client-go/socket"
 )
 
 func main() {
-    socket := eio.NewSocket("ws://localhost", nil)
-    
-    socket.On("open", func(args ...any) {
-        log.Println("Connection established")
-        
-        // Send a message after 1 second
+    opts := socket.DefaultOptions()
+    opts.SetTransports(types.NewSet(transports.Polling, transports.WebSocket /*transports.WebTransport*/))
+
+    manager := socket.NewManager("http://127.0.0.1:3000", opts)
+    // Listening to manager events
+    manager.On("error", func(errs ...any) {
+        utils.Log().Warning("Manager Error: %v", errs)
+    })
+
+    manager.On("ping", func(...any) {
+        utils.Log().Warning("Manager Ping")
+    })
+
+    manager.On("reconnect", func(...any) {
+        utils.Log().Warning("Manager Reconnected")
+    })
+
+    manager.On("reconnect_attempt", func(...any) {
+        utils.Log().Warning("Manager Reconnect Attempt")
+    })
+
+    manager.On("reconnect_error", func(errs ...any) {
+        utils.Log().Warning("Manager Reconnect Error: %v", errs)
+    })
+
+    manager.On("reconnect_failed", func(errs ...any) {
+        utils.Log().Warning("Manager Reconnect Failed: %v", errs)
+    })
+    io := manager.Socket("/custom", opts)
+    utils.Log().Error("socket %v", io)
+    io.On("connect", func(args ...any) {
+        utils.Log().Warning("io iD %v", io.Id())
         utils.SetTimeout(func() {
-            socket.Send(types.NewStringBufferString("Hello, Server!"), nil, nil)
+            io.Emit("message", types.NewStringBufferString("test"))
         }, 1*time.Second)
+        utils.Log().Warning("connect %v", args)
     })
 
-    socket.On("message", func(args ...any) {
-        log.Printf("Received message: %v", args[0])
+    io.On("connect_error", func(args ...any) {
+        utils.Log().Warning("connect_error %v", args)
     })
 
-    socket.On("close", func(args ...any) {
-        log.Println("Connection closed")
+    io.On("disconnect", func(args ...any) {
+        utils.Log().Warning("disconnect: %+v", args)
     })
-}
-```
 
-### Advanced Configuration
-
-```go
-package main
-
-import (
-    "github.com/zishang520/socket.io-client-go/engine"
-    "github.com/zishang520/socket.io-client-go/transports"
-    "github.com/zishang520/engine.io/v2/types"
-)
-
-func main() {
-    // Create custom socket options
-    opts := engine.DefaultSocketOptions()
-    
-    // Configure connection settings
-    opts.SetPath("/engine.io")
-    opts.SetQuery(map[string][]string{
-        "token": {"abc123"},
+    io.OnAny(func(args ...any) {
+        utils.Log().Warning("OnAny: %+v", args)
     })
-    
-    // Specify preferred transports
-    opts.SetTransports(types.NewSet(
-        transports.WebSocket,
-        transports.Polling,
-    ))
-    
-    // Configure timeouts
-    opts.SetRequestTimeout(time.Second * 10)
-    
-    // Create socket with custom options
-    socket := engine.NewSocket("ws://localhost", opts)
-    
-    // Handle events
-    socket.On("open", func(args ...any) {
-        // Connection established
+
+    io.On("message-back", func(args ...any) {
+        // io.Emit("message", types.NewStringBufferString("88888"))
+        utils.Log().Question("message-back: %+v", args)
     })
 }
-```
-
-## API Reference
-
-### Socket Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| Transports | *types.Set[TransportCtor] | types.NewSet(transports.Polling, transports.WebSocket, transports.WebTransport) | Available transport methods |
-| Path | string | "/engine.io" | Connection endpoint path |
-| Query | url.Values | nil | URL query parameters |
-| Upgrade | bool | true | Enable transport upgrade |
-| RememberUpgrade | bool | false | Remember successful WebSocket upgrades |
-| RequestTimeout | time.Duration | 0 | HTTP request timeout |
-| ExtraHeaders | http.Header | nil | Additional HTTP headers |
-
-### Events
-
-| Event | Description |
-|-------|-------------|
-| open | Fired upon successful connection |
-| message | Fired when data is received |
-| close | Fired upon disconnection |
-| error | Fired when an error occurs |
-| ping | Fired when a ping packet is received |
-| pong | Fired when a pong packet is sent |
-| upgrade | Fired upon successful transport upgrade |
-| upgradeError | Fired when transport upgrade fails |
-
-### Socket Methods
-
-```go
-// Send data to the server
-Send(data io.Reader, options *packet.Options, callback func()) engine.SocketWithoutUpgrade
-
-// Close the connection
-Close() engine.SocketWithoutUpgrade
-
-// Get current state
-ReadyState() engine.SocketState
-
-// Add event listener
-On(event string, fn events.Listener)
 ```
 
 ## Development
