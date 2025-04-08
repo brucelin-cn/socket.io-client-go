@@ -1,3 +1,15 @@
+// Package socket implements a Socket.IO client in Go.
+// It provides real-time bidirectional event-based communication between web clients and servers.
+//
+// Example usage:
+//
+//	socket, err := socket.Connect("http://localhost:8080", nil)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	socket.On("connect", func() {
+//	    socket.Emit("hello", "world")
+//	})
 package socket
 
 import (
