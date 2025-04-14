@@ -325,7 +325,7 @@ func (s *Socket) Emit(ev string, args ...any) error {
 	}
 
 	isTransportWritable := false
-	if engine := s.io.engine; engine != nil {
+	if engine := s.io.Engine(); engine != nil {
 		if transport := engine.Transport(); transport != nil {
 			isTransportWritable = transport.Writable()
 		}
@@ -333,7 +333,7 @@ func (s *Socket) Emit(ev string, args ...any) error {
 
 	isConnected := false
 	if s.connected.Load() {
-		if engine := s.io.engine; engine != nil && !engine.HasPingExpired() {
+		if engine := s.io.Engine(); engine != nil && !engine.HasPingExpired() {
 			isConnected = true
 		}
 	}
