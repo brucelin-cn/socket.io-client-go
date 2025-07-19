@@ -354,7 +354,16 @@ func (m *Manager) onopen(socket Engine) {
 		on(socket, "data", m.ondata),
 		on(socket, "error", m.onerror),
 		on(socket, "close", func(args ...any) {
-			m.onclose(args[0].(string), args[1].(error))
+			reason, ok := args[0].(string)
+			if !ok {
+				reason = ""
+			}
+
+			description, ok := args[1].(error)
+			if !ok {
+				description = nil
+			}
+			m.onclose(reason, description)
 		}),
 		on(m.decoder, "decoded", m.ondecoded),
 	)
