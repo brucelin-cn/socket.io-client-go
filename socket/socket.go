@@ -206,7 +206,15 @@ func (s *Socket) subEvents() {
 		}),
 		on(s.io, "error", s.onerror),
 		on(s.io, "close", func(args ...any) {
-			s.onclose(args[0].(string), args[1].(error))
+			reason, ok := args[0].(string)
+			if !ok {
+				reason = ""
+			}
+			description, ok := args[1].(error)
+			if !ok {
+				description = nil
+			}
+			s.onclose(reason, description)
 		}),
 	))
 }
